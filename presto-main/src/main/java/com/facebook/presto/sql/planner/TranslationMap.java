@@ -159,9 +159,10 @@ class TranslationMap
         expressionToSymbols.put(translated, symbol);
 
         // also update the field mappings if this expression is a field reference
-        rewriteBase.getScope().tryResolveField(expression)
-                .filter(ResolvedField::isLocal)
-                .ifPresent(field -> fieldSymbols[field.getHierarchyFieldIndex()] = symbol);
+        Optional<ResolvedField> resolvedField = rewriteBase.getScope().tryResolveField(expression);
+        if (resolvedField.isPresent() && resolvedField.get().isLocal()) {
+            fieldSymbols[resolvedField.get().getHierarchyFieldIndex()] = symbol;
+        }
     }
 
     public boolean containsSymbol(Expression expression)
@@ -302,9 +303,10 @@ class TranslationMap
 
     Optional<Symbol> getSymbol(RelationPlan plan, Expression expression)
     {
-        return plan.getScope()
-                .tryResolveField(expression)
-                .filter(ResolvedField::isLocal)
-                .map(field -> requireNonNull(plan.getFieldMappings().get(field.getHierarchyFieldIndex())));
+        Optional<ResolvedField> resolvedField = plan.getScope().tryResolveField(expression);
+        if (resolvedField.isPresent() && resolvedField.get().isLocal()) {
+            return Optional.of(plan.getFieldMappings().get(resolvedField.get().getHierarchyFieldIndex()));
+        }
+        return Optional.empty();
     }
 }
