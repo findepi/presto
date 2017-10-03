@@ -249,20 +249,9 @@ public class ExpressionAnalyzer
         return unmodifiableMap(resolvedReferences);
     }
 
-    public Map<NodeRef<Expression>, FieldId> getColumnReferences()
+    public Map<FieldId, LambdaArgumentDeclaration> getLambdaArguments()
     {
-        return resolvedReferences.entrySet().stream()
-                .filter(entry -> entry.getValue().getReferenceType() == COLUMN_REFERENCE)
-                .collect(toImmutableMap(Entry::getKey, entry -> entry.getValue().getFieldId()));
-    }
-
-    public Map<NodeRef<Identifier>, LambdaArgumentDeclaration> getLambdaArgumentReferences()
-    {
-        return resolvedReferences.entrySet().stream()
-                .filter(entry -> entry.getValue().getReferenceType() == LAMBDA_ARGUMENT)
-                .collect(toImmutableMap(
-                        entry -> NodeRef.of((Identifier) entry.getKey().getNode()),
-                        entry -> lambdaArguments.get(entry.getValue().getFieldId())));
+        return unmodifiableMap(lambdaArguments);
     }
 
     public Type analyze(Expression expression, Scope scope)
@@ -1487,10 +1476,10 @@ public class ExpressionAnalyzer
                 analyzer.getSubqueryInPredicates(),
                 analyzer.getScalarSubqueries(),
                 analyzer.getExistsSubqueries(),
-                analyzer.getColumnReferences(),
+                analyzer.getResolvedReferences(),
                 analyzer.getTypeOnlyCoercions(),
                 analyzer.getQuantifiedComparisons(),
-                analyzer.getLambdaArgumentReferences());
+                analyzer.getLambdaArguments());
     }
 
     public static ExpressionAnalysis analyzeExpression(
@@ -1521,10 +1510,10 @@ public class ExpressionAnalyzer
                 analyzer.getSubqueryInPredicates(),
                 analyzer.getScalarSubqueries(),
                 analyzer.getExistsSubqueries(),
-                analyzer.getColumnReferences(),
+                analyzer.getResolvedReferences(),
                 analyzer.getTypeOnlyCoercions(),
                 analyzer.getQuantifiedComparisons(),
-                analyzer.getLambdaArgumentReferences());
+                analyzer.getLambdaArguments());
     }
 
     public static ExpressionAnalyzer create(

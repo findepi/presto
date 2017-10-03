@@ -16,7 +16,6 @@ package com.facebook.presto.sql.analyzer;
 import com.facebook.presto.spi.type.Type;
 import com.facebook.presto.sql.tree.ExistsPredicate;
 import com.facebook.presto.sql.tree.Expression;
-import com.facebook.presto.sql.tree.Identifier;
 import com.facebook.presto.sql.tree.InPredicate;
 import com.facebook.presto.sql.tree.LambdaArgumentDeclaration;
 import com.facebook.presto.sql.tree.NodeRef;
@@ -28,6 +27,7 @@ import com.google.common.collect.ImmutableSet;
 import java.util.Map;
 import java.util.Set;
 
+import static com.facebook.presto.sql.analyzer.ResolvedReference.ReferenceType.COLUMN_REFERENCE;
 import static java.util.Objects.requireNonNull;
 
 public class ExpressionAnalysis
@@ -35,13 +35,13 @@ public class ExpressionAnalysis
     private final Map<NodeRef<Expression>, Type> expressionTypes;
     private final Map<NodeRef<Expression>, Type> expressionCoercions;
     private final Set<NodeRef<Expression>> typeOnlyCoercions;
-    private final Map<NodeRef<Expression>, FieldId> columnReferences;
+    private final Map<NodeRef<Expression>, ResolvedReference> resolvedReferences;
     private final Set<NodeRef<InPredicate>> subqueryInPredicates;
     private final Set<NodeRef<SubqueryExpression>> scalarSubqueries;
     private final Set<NodeRef<ExistsPredicate>> existsSubqueries;
     private final Set<NodeRef<QuantifiedComparisonExpression>> quantifiedComparisons;
     // For lambda argument references, maps each QualifiedNameReference to the referenced LambdaArgumentDeclaration
-    private final Map<NodeRef<Identifier>, LambdaArgumentDeclaration> lambdaArgumentReferences;
+    private final Map<FieldId, LambdaArgumentDeclaration> lambdaArguments;
 
     public ExpressionAnalysis(
             Map<NodeRef<Expression>, Type> expressionTypes,
@@ -49,20 +49,20 @@ public class ExpressionAnalysis
             Set<NodeRef<InPredicate>> subqueryInPredicates,
             Set<NodeRef<SubqueryExpression>> scalarSubqueries,
             Set<NodeRef<ExistsPredicate>> existsSubqueries,
-            Map<NodeRef<Expression>, FieldId> columnReferences,
+            Map<NodeRef<Expression>, ResolvedReference> resolvedReferences,
             Set<NodeRef<Expression>> typeOnlyCoercions,
             Set<NodeRef<QuantifiedComparisonExpression>> quantifiedComparisons,
-            Map<NodeRef<Identifier>, LambdaArgumentDeclaration> lambdaArgumentReferences)
+            Map<FieldId, LambdaArgumentDeclaration> lambdaArguments)
     {
         this.expressionTypes = ImmutableMap.copyOf(requireNonNull(expressionTypes, "expressionTypes is null"));
         this.expressionCoercions = ImmutableMap.copyOf(requireNonNull(expressionCoercions, "expressionCoercions is null"));
         this.typeOnlyCoercions = ImmutableSet.copyOf(requireNonNull(typeOnlyCoercions, "typeOnlyCoercions is null"));
-        this.columnReferences = ImmutableMap.copyOf(requireNonNull(columnReferences, "columnReferences is null"));
+        this.resolvedReferences = ImmutableMap.copyOf(requireNonNull(resolvedReferences, "resolvedReferences is null"));
         this.subqueryInPredicates = ImmutableSet.copyOf(requireNonNull(subqueryInPredicates, "subqueryInPredicates is null"));
         this.scalarSubqueries = ImmutableSet.copyOf(requireNonNull(scalarSubqueries, "subqueryInPredicates is null"));
         this.existsSubqueries = ImmutableSet.copyOf(requireNonNull(existsSubqueries, "existsSubqueries is null"));
         this.quantifiedComparisons = ImmutableSet.copyOf(requireNonNull(quantifiedComparisons, "quantifiedComparisons is null"));
-        this.lambdaArgumentReferences = ImmutableMap.copyOf(requireNonNull(lambdaArgumentReferences, "lambdaArgumentReferences is null"));
+        this.lambdaArguments = ImmutableMap.copyOf(requireNonNull(lambdaArguments, "lambdaArguments is null"));
     }
 
     public Type getType(Expression expression)
@@ -87,7 +87,11 @@ public class ExpressionAnalysis
 
     public boolean isColumnReference(Expression node)
     {
-        return columnReferences.containsKey(NodeRef.of(node));
+        ResolvedReference resolvedReference = resolvedReferences.get(NodeRef.of(node));
+        if (resolvedReference != null) {
+            return resolvedReference.getReferenceType() == COLUMN_REFERENCE;
+        }
+        return false;
     }
 
     public Set<NodeRef<InPredicate>> getSubqueryInPredicates()
