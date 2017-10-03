@@ -1513,8 +1513,7 @@ public class ExpressionAnalyzer
         analysis.addTypes(expressionTypes);
         analysis.addCoercions(expressionCoercions, typeOnlyCoercions);
         analysis.addFunctionSignatures(resolvedFunctions);
-        analysis.addColumnReferences(analyzer.getColumnReferences());
-        analysis.addLambdaArgumentReferences(analyzer.getLambdaArgumentReferences());
+        analysis.addResolvedReferences(analyzer.getResolvedReferences());
 
         return new ExpressionAnalysis(
                 expressionTypes,

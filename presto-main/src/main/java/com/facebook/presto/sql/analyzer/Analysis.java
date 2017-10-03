@@ -52,18 +52,21 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 
+import static com.facebook.presto.sql.analyzer.ResolvedReference.ReferenceType.COLUMN_REFERENCE;
+import static com.facebook.presto.sql.analyzer.ResolvedReference.ReferenceType.LAMBDA_ARGUMENT;
 import static com.facebook.presto.util.MoreLists.listOfListsCopy;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.unmodifiableCollection;
 import static java.util.Collections.unmodifiableList;
 import static java.util.Collections.unmodifiableMap;
-import static java.util.Collections.unmodifiableSet;
 import static java.util.Objects.requireNonNull;
 
 public class Analysis
@@ -76,7 +79,7 @@ public class Analysis
     private final Map<NodeRef<Table>, Query> namedQueries = new LinkedHashMap<>();
 
     private final Map<NodeRef<Node>, Scope> scopes = new LinkedHashMap<>();
-    private final Map<NodeRef<Expression>, FieldId> columnReferences = new LinkedHashMap<>();
+    private final Map<NodeRef<Expression>, ResolvedReference> resolvedReferences = new LinkedHashMap<>();
 
     private final Map<NodeRef<QuerySpecification>, List<FunctionCall>> aggregates = new LinkedHashMap<>();
     private final Map<NodeRef<OrderBy>, List<Expression>> orderByAggregates = new LinkedHashMap<>();
@@ -101,7 +104,7 @@ public class Analysis
     private final Set<NodeRef<Expression>> typeOnlyCoercions = new LinkedHashSet<>();
     private final Map<NodeRef<Relation>, List<Type>> relationCoercions = new LinkedHashMap<>();
     private final Map<NodeRef<FunctionCall>, Signature> functionSignature = new LinkedHashMap<>();
-    private final Map<NodeRef<Identifier>, LambdaArgumentDeclaration> lambdaArgumentReferences = new LinkedHashMap<>();
+    private final Map<FieldId, LambdaArgumentDeclaration> lambdaArguments = new LinkedHashMap<>();
 
     private final Map<Field, ColumnHandle> columns = new LinkedHashMap<>();
 
@@ -233,19 +236,32 @@ public class Analysis
         return coercions.get(NodeRef.of(expression));
     }
 
-    public void addLambdaArgumentReferences(Map<NodeRef<Identifier>, LambdaArgumentDeclaration> lambdaArgumentReferences)
+    public void addResolvedReferences(Map<NodeRef<Expression>, ResolvedReference> resolvedReferences)
     {
-        this.lambdaArgumentReferences.putAll(lambdaArgumentReferences);
+        // ImmutableMap used as a null check for keys and values
+        this.resolvedReferences.putAll(ImmutableMap.copyOf(resolvedReferences));
     }
 
+    @Nullable
     public LambdaArgumentDeclaration getLambdaArgumentReference(Identifier identifier)
     {
-        return lambdaArgumentReferences.get(NodeRef.of(identifier));
+        requireNonNull(identifier, "identifier is null");
+        ResolvedReference resolvedReference = resolvedReferences.get(NodeRef.<Expression>of(identifier));
+        if (resolvedReference == null) {
+            // Identifier can be no reference when it's part of DereferenceExpression being a reference. TODO we're hiding potential bugs by testing that identifier has been analyzed
+            return null;
+        }
+        if (resolvedReference.getReferenceType() != LAMBDA_ARGUMENT) {
+            return null;
+        }
+        LambdaArgumentDeclaration lambdaArgumentDeclaration = lambdaArguments.get(resolvedReference.getFieldId());
+        checkState(lambdaArgumentDeclaration != null, "No LambdaArgumentDeclaration for %s", identifier);
+        return lambdaArgumentDeclaration;
     }
 
-    public Map<NodeRef<Identifier>, LambdaArgumentDeclaration> getLambdaArgumentReferences()
+    public boolean isLambdaArgumentReference(Identifier identifier)
     {
-        return unmodifiableMap(lambdaArgumentReferences);
+        return getLambdaArgumentReference(identifier) != null;
     }
 
     public void setGroupingSets(QuerySpecification node, List<List<Expression>> expressions)
@@ -364,11 +380,6 @@ public class Analysis
         return orderByWindowFunctions.get(NodeRef.of(query));
     }
 
-    public void addColumnReferences(Map<NodeRef<Expression>, FieldId> columnReferences)
-    {
-        this.columnReferences.putAll(columnReferences);
-    }
-
     public Scope getScope(Node node)
     {
         return tryGetScope(node).orElseThrow(() -> new IllegalArgumentException(String.format("Analysis does not contain information for node: %s", node)));
@@ -431,18 +442,21 @@ public class Analysis
 
     public Set<NodeRef<Expression>> getColumnReferences()
     {
-        return unmodifiableSet(columnReferences.keySet());
+        return getColumnReferenceFields().keySet();
     }
 
     public Map<NodeRef<Expression>, FieldId> getColumnReferenceFields()
     {
-        return unmodifiableMap(columnReferences);
+        return resolvedReferences.entrySet().stream()
+                .filter(entry -> entry.getValue().getReferenceType() == COLUMN_REFERENCE)
+                .collect(toImmutableMap(Entry::getKey, entry -> entry.getValue().getFieldId()));
     }
 
     public boolean isColumnReference(Expression expression)
     {
         requireNonNull(expression, "expression is null");
-        return columnReferences.containsKey(NodeRef.of(expression));
+        ResolvedReference resolvedReference = resolvedReferences.get(NodeRef.of(expression));
+        return resolvedReference != null && resolvedReference.getReferenceType() == COLUMN_REFERENCE;
     }
 
     public void addTypes(Map<NodeRef<Expression>, Type> types)

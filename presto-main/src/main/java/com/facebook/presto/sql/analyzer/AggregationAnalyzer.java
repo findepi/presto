@@ -434,7 +434,7 @@ class AggregationAnalyzer
         @Override
         protected Boolean visitIdentifier(Identifier node, Void context)
         {
-            if (analysis.getLambdaArgumentReferences().containsKey(NodeRef.of(node))) {
+            if (analysis.isLambdaArgumentReference(node)) {
                 return true;
             }
             return isGroupingKey(node);
