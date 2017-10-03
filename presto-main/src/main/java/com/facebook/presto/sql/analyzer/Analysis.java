@@ -247,10 +247,7 @@ public class Analysis
     {
         requireNonNull(identifier, "identifier is null");
         ResolvedReference resolvedReference = resolvedReferences.get(NodeRef.<Expression>of(identifier));
-        if (resolvedReference == null) {
-            // Identifier can be no reference when it's part of DereferenceExpression being a reference. TODO we're hiding potential bugs by testing that identifier has been analyzed
-            return null;
-        }
+        checkArgument(resolvedReference != null, "%s has not been resolved yet", identifier);
         if (resolvedReference.getReferenceType() != LAMBDA_ARGUMENT) {
             return null;
         }

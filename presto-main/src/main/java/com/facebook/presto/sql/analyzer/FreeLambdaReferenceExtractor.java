@@ -14,6 +14,7 @@
 package com.facebook.presto.sql.analyzer;
 
 import com.facebook.presto.sql.tree.DefaultExpressionTraversalVisitor;
+import com.facebook.presto.sql.tree.DereferenceExpression;
 import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.Identifier;
 import com.facebook.presto.sql.tree.LambdaArgumentDeclaration;
@@ -71,6 +72,15 @@ public class FreeLambdaReferenceExtractor
                 freeReferencesToLambdaArgument.add(node);
             }
             return null;
+        }
+
+        @Override
+        protected Void visitDereferenceExpression(DereferenceExpression node, Set<String> context)
+        {
+            if (analysis.getColumnReferences().contains(NodeRef.<Expression>of(node))) {
+                return null;
+            }
+            return super.visitDereferenceExpression(node, context);
         }
 
         @Override
