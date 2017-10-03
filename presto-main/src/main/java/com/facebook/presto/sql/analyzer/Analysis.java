@@ -437,6 +437,14 @@ public class Analysis
         functionSignature.putAll(infos);
     }
 
+    public ResolvedReference getResolvedReference(Expression expression)
+    {
+        requireNonNull(expression, "expression is null");
+        ResolvedReference resolvedReference = resolvedReferences.get(NodeRef.of(expression));
+        checkArgument(resolvedReference != null, "%s is not reference", expression);
+        return resolvedReference;
+    }
+
     public Set<NodeRef<Expression>> getColumnReferences()
     {
         return getColumnReferenceFields().keySet();
