@@ -439,6 +439,12 @@ public class Analysis
         return unmodifiableMap(columnReferences);
     }
 
+    public boolean isColumnReference(Expression expression)
+    {
+        requireNonNull(expression, "expression is null");
+        return columnReferences.containsKey(NodeRef.of(expression));
+    }
+
     public void addTypes(Map<NodeRef<Expression>, Type> types)
     {
         this.types.putAll(types);
