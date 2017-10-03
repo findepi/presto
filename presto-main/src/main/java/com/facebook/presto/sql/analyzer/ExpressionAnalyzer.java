@@ -31,6 +31,7 @@ import com.facebook.presto.spi.type.Type;
 import com.facebook.presto.spi.type.TypeManager;
 import com.facebook.presto.spi.type.TypeSignatureParameter;
 import com.facebook.presto.spi.type.VarcharType;
+import com.facebook.presto.sql.analyzer.ResolvedReference.ReferenceType;
 import com.facebook.presto.sql.parser.SqlParser;
 import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.tree.ArithmeticBinaryExpression;
@@ -128,6 +129,8 @@ import static com.facebook.presto.spi.type.VarbinaryType.VARBINARY;
 import static com.facebook.presto.spi.type.VarcharType.VARCHAR;
 import static com.facebook.presto.sql.NodeUtils.getSortItemsFromOrderBy;
 import static com.facebook.presto.sql.analyzer.Analyzer.verifyNoAggregateWindowOrGroupingFunctions;
+import static com.facebook.presto.sql.analyzer.ResolvedReference.ReferenceType.COLUMN_REFERENCE;
+import static com.facebook.presto.sql.analyzer.ResolvedReference.ReferenceType.LAMBDA_ARGUMENT;
 import static com.facebook.presto.sql.analyzer.SemanticErrorCode.EXPRESSION_NOT_CONSTANT;
 import static com.facebook.presto.sql.analyzer.SemanticErrorCode.INVALID_LITERAL;
 import static com.facebook.presto.sql.analyzer.SemanticErrorCode.INVALID_PARAMETER_USAGE;
@@ -150,6 +153,7 @@ import static com.facebook.presto.util.DateTimeUtils.timestampHasTimeZone;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static java.lang.String.format;
 import static java.util.Collections.unmodifiableMap;
@@ -170,11 +174,10 @@ public class ExpressionAnalyzer
     private final Map<NodeRef<Expression>, Type> expressionCoercions = new LinkedHashMap<>();
     private final Set<NodeRef<Expression>> typeOnlyCoercions = new LinkedHashSet<>();
     private final Set<NodeRef<InPredicate>> subqueryInPredicates = new LinkedHashSet<>();
-    private final Map<NodeRef<Expression>, FieldId> columnReferences = new LinkedHashMap<>();
+    private final Map<NodeRef<Expression>, ResolvedReference> resolvedReferences = new LinkedHashMap<>();
     private final Map<NodeRef<Expression>, Type> expressionTypes = new LinkedHashMap<>();
     private final Set<NodeRef<QuantifiedComparisonExpression>> quantifiedComparisons = new LinkedHashSet<>();
-    // For lambda argument references, maps each QualifiedNameReference to the referenced LambdaArgumentDeclaration
-    private final Map<NodeRef<Identifier>, LambdaArgumentDeclaration> lambdaArgumentReferences = new LinkedHashMap<>();
+    private final Map<FieldId, LambdaArgumentDeclaration> lambdaArguments = new LinkedHashMap<>();
 
     private final Session session;
     private final List<Expression> parameters;
@@ -241,14 +244,25 @@ public class ExpressionAnalyzer
         return unmodifiableSet(subqueryInPredicates);
     }
 
+    public Map<NodeRef<Expression>, ResolvedReference> getResolvedReferences()
+    {
+        return unmodifiableMap(resolvedReferences);
+    }
+
     public Map<NodeRef<Expression>, FieldId> getColumnReferences()
     {
-        return unmodifiableMap(columnReferences);
+        return resolvedReferences.entrySet().stream()
+                .filter(entry -> entry.getValue().getReferenceType() == COLUMN_REFERENCE)
+                .collect(toImmutableMap(Entry::getKey, entry -> entry.getValue().getFieldId()));
     }
 
     public Map<NodeRef<Identifier>, LambdaArgumentDeclaration> getLambdaArgumentReferences()
     {
-        return unmodifiableMap(lambdaArgumentReferences);
+        return resolvedReferences.entrySet().stream()
+                .filter(entry -> entry.getValue().getReferenceType() == LAMBDA_ARGUMENT)
+                .collect(toImmutableMap(
+                        entry -> NodeRef.of((Identifier) entry.getKey().getNode()),
+                        entry -> lambdaArguments.get(entry.getValue().getFieldId())));
     }
 
     public Type analyze(Expression expression, Scope scope)
@@ -370,17 +384,16 @@ public class ExpressionAnalyzer
 
         private Type handleResolvedField(Expression node, FieldId fieldId, Type resolvedType, StackableAstVisitorContext<Context> context)
         {
-            if (context.getContext().isInLambda()) {
-                LambdaArgumentDeclaration lambdaArgumentDeclaration = context.getContext().getFieldToLambdaArgumentDeclaration().get(fieldId);
-                if (lambdaArgumentDeclaration != null) {
-                    // Lambda argument reference is not a column reference
-                    lambdaArgumentReferences.put(NodeRef.of((Identifier) node), lambdaArgumentDeclaration);
-                    return setExpressionType(node, resolvedType);
-                }
+            ReferenceType referenceType;
+            if (context.getContext().isInLambda() && context.getContext().getFieldToLambdaArgumentDeclaration().containsKey(fieldId)) {
+                referenceType = LAMBDA_ARGUMENT;
+            }
+            else {
+                referenceType = COLUMN_REFERENCE;
             }
 
-            FieldId previous = columnReferences.put(NodeRef.of(node), fieldId);
-            checkState(previous == null, "%s already known to refer to %s", node, previous);
+            ResolvedReference previous = resolvedReferences.put(NodeRef.of(node), new ResolvedReference(fieldId, referenceType));
+            checkState(previous == null, "%s already knowFieldIdn to refer to %s", node, previous);
             return setExpressionType(node, resolvedType);
         }
 
