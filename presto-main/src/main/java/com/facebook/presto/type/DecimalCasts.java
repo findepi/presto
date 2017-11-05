@@ -63,6 +63,7 @@ import static com.facebook.presto.spi.type.UnscaledDecimal128Arithmetic.rescale;
 import static com.facebook.presto.spi.type.UnscaledDecimal128Arithmetic.unscaledDecimal;
 import static com.facebook.presto.spi.type.UnscaledDecimal128Arithmetic.unscaledDecimalToUnscaledLong;
 import static com.facebook.presto.spi.type.UnscaledDecimal128Arithmetic.unscaledDecimalToUnscaledLongUnsafe;
+import static com.facebook.presto.spi.type.Varchars.truncateAsciiSliceToLength;
 import static com.facebook.presto.type.JsonType.JSON;
 import static com.facebook.presto.util.Failures.checkCondition;
 import static com.facebook.presto.util.JsonUtil.createJsonGenerator;
@@ -139,6 +140,7 @@ public final class DecimalCasts
                         .withExtraParameters((context) -> {
                             long precision = context.getLiteral("precision");
                             long scale = context.getLiteral("scale");
+                            long varcharLength = context.getLiteral("x");
                             Number tenToScale;
                             if (isShortDecimal(context.getParameterTypes().get(0))) {
                                 tenToScale = longTenToNth(intScale(scale));
@@ -146,7 +148,7 @@ public final class DecimalCasts
                             else {
                                 tenToScale = bigIntegerTenToNth(intScale(scale));
                             }
-                            return ImmutableList.of(precision, scale, tenToScale);
+                            return ImmutableList.of(precision, scale, tenToScale, (int) varcharLength);
                         }))
                 .build();
     }
@@ -549,15 +551,15 @@ public final class DecimalCasts
     }
 
     @UsedByGeneratedCode
-    public static Slice shortDecimalToVarchar(long decimal, long precision, long scale, long tenToScale)
+    public static Slice shortDecimalToVarchar(long decimal, long precision, long scale, long tenToScale, int varcharLength)
     {
-        return utf8Slice(Decimals.toString(decimal, intScale(scale)));
+        return truncateAsciiSliceToLength(utf8Slice(Decimals.toString(decimal, intScale(scale))), varcharLength);
     }
 
     @UsedByGeneratedCode
-    public static Slice longDecimalToVarchar(Slice decimal, long precision, long scale, BigInteger tenToScale)
+    public static Slice longDecimalToVarchar(Slice decimal, long precision, long scale, BigInteger tenToScale, int varcharLength)
     {
-        return utf8Slice(Decimals.toString(decimal, intScale(scale)));
+        return truncateAsciiSliceToLength(utf8Slice(Decimals.toString(decimal, intScale(scale))), varcharLength);
     }
 
     @UsedByGeneratedCode

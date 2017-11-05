@@ -24,6 +24,7 @@ import static com.facebook.presto.spi.type.RealType.REAL;
 import static com.facebook.presto.spi.type.SmallintType.SMALLINT;
 import static com.facebook.presto.spi.type.TinyintType.TINYINT;
 import static com.facebook.presto.spi.type.VarcharType.VARCHAR;
+import static com.facebook.presto.spi.type.VarcharType.createVarcharType;
 
 public class TestDecimalCasts
         extends AbstractTestFunctions
@@ -445,5 +446,8 @@ public class TestDecimalCasts
         assertFunction("CAST(DECIMAL '-1234567890.1234567890' AS VARCHAR)", VARCHAR, "-1234567890.1234567890");
         assertFunction("CAST(DECIMAL '1234567890.12345678900000000000' AS VARCHAR)", VARCHAR, "1234567890.12345678900000000000");
         assertFunction("CAST(DECIMAL '-1234567890.12345678900000000000' AS VARCHAR)", VARCHAR, "-1234567890.12345678900000000000");
+
+        assertFunction("CAST(DECIMAL '0.0034' AS VARCHAR(5))", createVarcharType(5), "0.003");
+        assertFunction("CAST(DECIMAL '-1234567890.12345678900000000000' AS VARCHAR(20))", createVarcharType(20), "-1234567890.12345678");
     }
 }
